@@ -253,7 +253,7 @@ table.heatmap tbody tr:nth-child(odd) th{background:#fafbfc}
           <div id="x_q2"></div>
         </div>
         <div class="card">
-          <h3 class="card-title">まちなかへの実感</h3><p class="card-sub">questionnaire_q4（ユニーク参加者）</p>
+          <h3 class="card-title">まちへの実感</h3><p class="card-sub">questionnaire_q4（ユニーク参加者）</p>
           <div id="x_q4"></div>
         </div>
         <div class="card full">
@@ -368,7 +368,7 @@ table.heatmap tbody tr:nth-child(odd) th{background:#fafbfc}
     </div>
   </div>
 </div>
-<footer>参照: MART_STAMP_JoinAttribute.json / MART_DROP_JoinAttribute_scored.json ・ DROP側は artwork_id × index（1投稿20行）の縦持ち形式のため、投稿数・平均スコア等はすべて artwork_id 単位に集約してから集計（行数カウントは行わない）。参加者数の集計は account_id 単位のユニークカウント。複数選択項目（questionnaire_q3 / questionnaire_q5）はカンマ区切りを展開して集計。左サイドバーのフィルタ（性別・年代・居住区分・居住地・来訪目的・体験ニーズ・まちなかへの実感／期待）はすべて複数選択式で、ページ内の全ビューに連動します。</footer>
+<footer>参照: MART_STAMP_JoinAttribute.json / MART_DROP_JoinAttribute_scored.json ・ DROP側は artwork_id × index（1投稿20行）の縦持ち形式のため、投稿数・平均スコア等はすべて artwork_id 単位に集約してから集計（行数カウントは行わない）。参加者数の集計は account_id 単位のユニークカウント。複数選択項目（questionnaire_q3 / questionnaire_q5）はカンマ区切りを展開して集計。左サイドバーのフィルタ（性別・年代・居住区分・居住地・来訪目的・体験ニーズ・まちへの実感／期待）はすべて複数選択式で、ページ内の全ビューに連動します。</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const PATHS={
@@ -420,8 +420,8 @@ const FILTER_DEFS=[
   {key:'questionnaire_q1', label:'居住地', multi:false, order:null},
   {key:'questionnaire_q2', label:'来訪目的', multi:false, order:null},
   {key:'questionnaire_q3', label:'体験ニーズ', multi:true, order:null},
-  {key:'questionnaire_q4', label:'まちなかへの実感', multi:false, order:['とても感じている','やや感じている','どちらでもない','あまり感じていない','全く感じていない']},
-  {key:'questionnaire_q5', label:'まちなかへの期待', multi:true, order:null},
+  {key:'questionnaire_q4', label:'まちへの実感', multi:false, order:['とても感じている','やや感じている','どちらでもない','あまり感じていない','全く感じていない']},
+  {key:'questionnaire_q5', label:'まちへの期待', multi:true, order:null},
 ];
 const FILTER_OPTIONS={}; // key -> ordered array of possible values
 const FILTER_STATE={};   // key -> Set of currently-selected values
