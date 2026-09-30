@@ -1,1 +1,933 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>富山まちなかイベント 参加者行動データダッシュボード</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+:root{
+  --bg:#eef0f3; --panel:#fff; --stroke:#e2e6ea; --text:#1f2733; --muted:#5b636c; --dim:#8b949e;
+  --attr:#3f66b3; --attr-soft:rgba(63,102,179,.10);
+  --acq:#2f8f66;  --acq-soft:rgba(47,143,102,.10);
+  --rich:#7a58b0; --rich-soft:rgba(122,88,176,.10);
+  --gray:#64748b; --gray-soft:rgba(100,116,139,.10);
+  --gap:18px; --sidebar-w:280px;
+  --font:"Inter","Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+/* sidebar */
+.sidebar{background:#fff;border-right:1px solid var(--stroke);padding:22px 16px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.brand{font-weight:900;font-size:21px;line-height:1.05;letter-spacing:-.5px}
+.brand span{color:var(--gray)}
+.brand small{display:block;color:var(--muted);font-size:11px;letter-spacing:1.5px;margin-top:6px;font-weight:700}
+.cap{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);margin:22px 4px 8px}
+.navi{display:flex;align-items:center;gap:10px;padding:9px 10px;border-left:2px solid transparent;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer}
+.navi.active{border-left-color:var(--gray);font-weight:700;color:var(--text)}
+/* filter panel */
+.filter-panel{flex:1;min-height:0;overflow-y:auto;margin-top:14px;padding:14px 2px 8px;border-top:1px solid var(--stroke)}
+.filter-actions{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.filter-actions button{font-size:10.5px;font-weight:700;padding:6px 9px;border:1px solid var(--stroke);background:#fff;color:var(--muted);border-radius:5px;cursor:pointer}
+.filter-actions button:hover{background:var(--bg);color:var(--text)}
+.filter-hint{font-size:10.5px;color:var(--dim);line-height:1.6;margin:0 2px 12px}
+details.filter-group{border-bottom:1px solid var(--stroke);padding:9px 2px}
+details.filter-group summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--text);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+details.filter-group summary::-webkit-details-marker{display:none}
+details.filter-group summary::before{content:"▸";font-size:10px;color:var(--dim);margin-right:2px;transition:transform .15s}
+details.filter-group[open] summary::before{transform:rotate(90deg)}
+.fg-count{font-size:10px;color:var(--dim);font-weight:600;white-space:nowrap;margin-left:auto}
+.fg-options{margin-top:9px;display:flex;flex-direction:column;gap:6px;max-height:190px;overflow-y:auto;padding:2px 6px 2px 2px}
+.fg-options label{font-size:11.5px;color:var(--muted);display:flex;align-items:flex-start;gap:7px;cursor:pointer;line-height:1.4}
+.fg-options input[type=checkbox]{accent-color:var(--attr);margin-top:2px;flex:0 0 auto}
+.side-foot{flex:0 0 auto;font-size:10.5px;color:var(--dim);line-height:1.6;padding-top:10px}
+/* main */
+main{padding:24px 28px 48px;min-width:0}
+.view{display:none}
+.view.active{display:block}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.topbar h1{font-size:34px;font-weight:900;margin:0;letter-spacing:-.7px}
+.topbar p{font-size:12.5px;color:var(--muted);margin:7px 0 0}
+.status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--stroke);padding:8px 14px;border-radius:999px;white-space:nowrap}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--acq);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,143,102,.5)}70%{box-shadow:0 0 0 8px rgba(47,143,102,0)}100%{box-shadow:0 0 0 0 rgba(47,143,102,0)}}
+.filters{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;background:#fff;padding:16px 18px;margin-bottom:6px;border-top:2px solid rgba(100,116,139,.55)}
+.filters label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+select{display:block;margin-top:7px;padding:8px 30px 8px 10px;background:#fff;border:1px solid var(--stroke);color:var(--text);font-family:var(--font);font-size:13px}
+.filters .hint{margin-left:auto;font-size:11.5px;color:var(--dim);align-self:center;max-width:520px;line-height:1.6}
+.section-label{display:flex;align-items:baseline;gap:12px;margin:34px 2px 14px;flex-wrap:wrap}
+.section-label h2{margin:0;font-size:26px;font-weight:900;letter-spacing:-.4px}
+.section-label .note{font-size:11px;color:var(--dim);font-weight:500}
+.grid{display:grid;gap:var(--gap)}
+.kpis{grid-template-columns:repeat(4,1fr)}
+.cross{grid-template-columns:1fr 1fr}
+.cross .full{grid-column:1 / -1}
+.card{background:var(--panel);padding:20px;border:0;box-shadow:none}
+.kpi{border-top:3px solid var(--gray)}
+.kpi.c-attr{border-top-color:var(--attr)}
+.kpi.c-acq{border-top-color:var(--acq)}
+.kpi .k-label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.kpi .k-val{font-size:32px;font-weight:800;margin:9px 0 3px;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:var(--gray)}
+.kpi.c-attr .k-val{color:var(--attr)}
+.kpi.c-acq .k-val{color:var(--acq)}
+.kpi .k-cap{font-size:11px;color:var(--dim)}
+h3.card-title{font-size:14.5px;font-weight:800;margin:0 0 4px;color:var(--text)}
+p.card-sub{font-size:11.5px;color:var(--dim);margin:0 0 16px}
+.xrow{margin:12px 0;padding-bottom:11px;border-bottom:1px solid var(--stroke)}
+.xrow:last-child{border-bottom:0;padding-bottom:0}
+.xrow .xlabel{font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px}
+.xbar-line{display:grid;grid-template-columns:1fr 92px;align-items:center;gap:10px}
+.xtrack{height:11px;background:#eef0f3;position:relative;overflow:hidden}
+.xfill{height:100%;background:var(--attr)}
+.xbar-line .xval{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.error{display:none;color:#b42318;background:#fff;padding:14px 18px;border-top:2px solid #b42318;margin-bottom:16px;font-size:13px}
+.empty-note{font-size:12px;color:var(--dim);padding:6px 0}
+footer{padding:26px 28px 30px;margin-left:var(--sidebar-w);color:var(--dim);font-size:11px;text-align:center;line-height:1.7}
+footer code{color:var(--muted)}
+/* wellbeing ranking (single-series bar list) */
+.score-list{display:flex;flex-direction:column;gap:0}
+.rank-list{display:flex;flex-direction:column}
+.rank-row{display:grid;grid-template-columns:28px 1fr 84px;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--stroke)}
+.rank-row:last-child{border-bottom:0}
+.rank-row .rank-num{font-size:13px;font-weight:800;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
+.rank-row .rank-body{min-width:0;display:flex;flex-direction:column;gap:5px}
+.rank-row .rank-name{font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-row .rank-track{height:9px;background:#eef0f3}
+.rank-row .rank-fill{height:100%;background:var(--attr)}
+.rank-row .rank-val{font-size:13px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums;color:var(--attr)}
+/* viewer controls */
+.viewer-controls{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px}
+.map-card{padding:0;overflow:hidden}
+.map-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:18px 20px 14px}
+.map-head h3{margin:0}
+.map-legend{display:flex;gap:16px;font-size:11.5px;color:var(--muted)}
+.map-legend .lg{display:flex;align-items:center;gap:7px}
+.map-legend .dot{width:11px;height:11px;border-radius:50%;display:inline-block;background:var(--attr)}
+.map-box{width:100%;height:640px;background:#e8ebef}
+.map-box.tall{height:760px}
+.leaflet-popup-content{font-family:var(--font);font-size:12.5px;line-height:1.6}
+.leaflet-popup-content b{color:var(--text)}
+.popup-detail-btn{margin-top:8px;border:0;background:var(--text);color:#fff;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer}
+.popup-detail-btn:hover{background:var(--muted)}
+/* DROP post tiles (縦長カード・画像は正方形トリミング) */
+.post-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;align-items:start;margin-top:18px}
+.post-card{background:#fff;border:1px solid var(--stroke);border-top:3px solid var(--attr);display:flex;flex-direction:column;overflow:hidden;cursor:pointer;transition:box-shadow .15s ease,transform .15s ease}
+.post-card:hover{box-shadow:0 4px 16px rgba(31,39,51,.14);transform:translateY(-2px)}
+.post-card .thumb{width:100%;aspect-ratio:1/1;object-fit:cover;background:#e8ebef;display:block;flex:0 0 auto}
+.post-card .body{padding:11px 13px 13px;display:flex;flex-direction:column;flex:1;min-height:0;gap:7px}
+.post-card .badge-row{display:flex;flex-wrap:wrap;gap:6px}
+.post-card .score-badge{display:inline-block;color:#fff;background:var(--attr);font-size:11.5px;font-weight:800;padding:3px 9px;flex:0 0 auto;width:fit-content}
+.post-card .focus-badge{display:inline-block;color:var(--rich);background:var(--rich-soft);font-size:11px;font-weight:700;padding:3px 9px;flex:0 0 auto;width:fit-content}
+.post-card .sentence{font-size:12px;color:var(--text);line-height:1.55;margin:0;flex:1;min-height:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical}
+.post-card .meta{font-size:10.5px;color:var(--dim);flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-card .detail-hint{font-size:10px;color:var(--dim);flex:0 0 auto;display:flex;align-items:center;gap:4px}
+.post-card:hover .detail-hint{color:var(--text)}
+/* threshold slider (DROP viewer) */
+.threshold-ctrl{display:flex;align-items:center;gap:10px}
+.threshold-ctrl input[type=range]{accent-color:var(--attr);width:150px}
+.threshold-ctrl .th-val{font-size:13px;font-weight:800;color:var(--attr);min-width:26px;text-align:center}
+/* DROP analysis page */
+.modal-evidence{font-size:11px;color:var(--dim);margin:0 0 10px;line-height:1.6}
+.stack-row{margin:12px 0;padding-bottom:11px;border-bottom:1px solid var(--stroke)}
+.stack-row:last-child{border-bottom:0}
+.stack-row .stack-label{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:8px}
+.stack-track{display:flex;height:14px;background:#eef0f3;overflow:hidden;width:100%}
+.stack-seg{height:100%}
+.stack-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:14px}
+.stack-legend .lg{display:flex;align-items:center;gap:6px}
+.stack-legend .dot{width:10px;height:10px;display:inline-block;flex:0 0 auto}
+/* DROP detail modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,24,30,.55);z-index:1000;padding:28px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex;align-items:flex-start;justify-content:center}
+.modal-box{background:#fff;max-width:880px;width:100%;margin:auto;max-height:calc(100vh - 56px);overflow-y:auto;border-top:4px solid var(--attr)}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 22px 0}
+.modal-seg{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;color:#fff;background:var(--attr)}
+.modal-close{border:0;background:var(--stroke);color:var(--text);font-size:14px;font-weight:800;width:28px;height:28px;line-height:28px;text-align:center;cursor:pointer;flex:0 0 auto;padding:0}
+.modal-close:hover{background:var(--dim);color:#fff}
+.modal-body{padding:16px 22px 26px;display:grid;grid-template-columns:220px 1fr;gap:22px}
+.modal-img{width:100%;height:220px;object-fit:cover;background:#e8ebef;display:block}
+.modal-meta-list{margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.9}
+.modal-meta-list b{color:var(--text)}
+.modal-sentence{font-size:13.5px;line-height:1.7;color:var(--text);margin:0 0 18px;white-space:pre-wrap}
+.modal-score-title{font-size:12.5px;font-weight:800;color:var(--text);margin:0 0 4px}
+.modal-score-sub{font-size:11px;color:var(--dim);margin:0 0 12px}
+.detail-bars{display:flex;flex-direction:column;gap:8px}
+.detail-bar-row{display:grid;grid-template-columns:112px 1fr 56px;align-items:center;gap:10px}
+.detail-bar-row .db-label{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.detail-bar-row.current .db-label{font-weight:800;color:var(--text)}
+.detail-bar-track{height:10px;background:#eef0f3;position:relative}
+.detail-bar-fill{height:100%;background:var(--attr)}
+.detail-bar-row .db-val{font-size:11.5px;font-weight:700;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+@media (max-width:640px){.modal-body{grid-template-columns:1fr}.modal-img{height:180px}}
+/* STAMP bubble markers */
+.stamp-bubble{display:flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:800;font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px rgba(255,255,255,.85);opacity:.88;background:var(--attr)}
+@media (max-width:1080px){.kpis{grid-template-columns:repeat(2,1fr)}.cross{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr} .sidebar{display:none}
+  main{padding:16px 14px 40px} footer{margin-left:0;padding:20px 14px 26px}
+  .topbar h1{font-size:29px} .section-label h2{font-size:22px}
+  .filters{flex-direction:column;align-items:stretch} .filters .hint{margin-left:0}
+  .map-box{height:460px} .map-box.tall{height:560px}
+  .post-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+}
+@media (max-width:430px){
+  .kpis{grid-template-columns:1fr 1fr;gap:10px} .card{padding:14px} .kpi .k-val{font-size:23px}
+  .post-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">TOYAMA<span>.</span><small>EVENT INSIGHT</small></div>
+    <div class="cap" style="margin-top:14px">Dashboard</div>
+    <span class="navi active" data-view="summary">Summary</span>
+    <span class="navi" data-view="dropviewer">DROP ビューワー</span>
+    <span class="navi" data-view="dropanalysis">DROP 分析</span>
+    <span class="navi" data-view="stampviewer">STAMP ビューワー</span>
+    <div class="filter-panel">
+      <div class="cap" style="margin:0 0 8px">Filters（複数選択可）</div>
+      <div class="filter-actions">
+        <button type="button" id="filterSelectAll">すべて選択</button>
+        <button type="button" id="filterClearAll">すべて解除</button>
+      </div>
+      <p class="filter-hint">ユーザー属性・アンケート回答で絞り込みます。居住区分（定住／非定住）もフィルタの一つです。チェックを外すとその値を除外します。</p>
+      <div id="filterGroups"></div>
+    </div>
+    <div class="side-foot">富山まちなかイベント<br>参加者行動データ分析</div>
+  </aside>
+  <main>
+    <!-- ===================== SUMMARY VIEW ===================== -->
+    <section id="view-summary" class="view active">
+      <div class="topbar">
+        <div><h1>Event Insight</h1><p>富山まちなかイベントの参加者行動分析</p></div>
+        <div class="status"><span class="pulse"></span>JSON DATA CONNECTED</div>
+      </div>
+      <div id="error" class="error"></div>
+      <div class="filters">
+        <label>データ
+          <select id="dataset">
+            <option value="all">STAMP + DROP</option>
+            <option value="stamp">STAMP（スタンプラリー）</option>
+            <option value="drop">DROP（フォト投稿）</option>
+          </select>
+        </label>
+        <span class="hint">属性集計は account_id ベースのユニーク参加者数で算出。左サイドバーのフィルタで絞り込んだ結果に連動します。</span>
+      </div>
+      <div class="section-label"><h2>KPI<span class="note">フィルタ適用後の集計（account_id ユニークカウント）</span></h2></div>
+      <section class="grid kpis">
+        <div class="card kpi"><span class="k-label">総参加者数</span><b class="k-val" id="k_total">-</b><span class="k-cap">STAMP＋DROP合算・account_id 重複排除</span></div>
+        <div class="card kpi c-attr"><span class="k-label">総DROP投稿数</span><b class="k-val" id="k_drop_posts">-</b><span class="k-cap">artwork_id 重複排除（行数ではなく投稿単位）</span></div>
+        <div class="card kpi c-attr"><span class="k-label">総DROP投稿者数</span><b class="k-val" id="k_drop_users">-</b><span class="k-cap">account_id 重複排除</span></div>
+        <div class="card kpi c-acq"><span class="k-label">総スタンプ取得者数</span><b class="k-val" id="k_stamp_users">-</b><span class="k-cap">account_id 重複排除</span></div>
+      </section>
+      <div class="section-label"><h2>属性分布<span class="note">ユーザー属性 × アンケート回答</span></h2></div>
+      <section class="grid cross">
+        <div class="card">
+          <h3 class="card-title">年齢層</h3><p class="card-sub">age_group（ユニーク参加者）</p>
+          <div id="x_age"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">性別</h3><p class="card-sub">gender（ユニーク参加者）</p>
+          <div id="x_gender"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">居住区分</h3><p class="card-sub">residence_segment（ユニーク参加者）</p>
+          <div id="x_residence_segment"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">居住地</h3><p class="card-sub">questionnaire_q1（ユニーク参加者）</p>
+          <div id="x_q1"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">来訪目的</h3><p class="card-sub">questionnaire_q2（ユニーク参加者）</p>
+          <div id="x_q2"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">まちなかへの実感</h3><p class="card-sub">questionnaire_q4（ユニーク参加者）</p>
+          <div id="x_q4"></div>
+        </div>
+        <div class="card full">
+          <h3 class="card-title">体験ニーズ</h3><p class="card-sub">questionnaire_q3（複数選択・ユニーク参加者。合計は参加者数を超える場合あり）</p>
+          <div id="x_q3"></div>
+        </div>
+      </section>
+      <div class="section-label"><h2>Wellbeing Score<span class="note">DROP投稿スコア（フィルタ適用後の平均値ランキング）</span></h2></div>
+      <section class="grid">
+        <div class="card full">
+          <h3 class="card-title">指標別 平均スコア（Index）</h3>
+          <p class="card-sub">MART_DROP_JoinAttribute_scored.json の index / index_score を artwork_id 単位に集計（1投稿=1artwork_id）し、指標別の平均スコアを高い順に表示。属性別の比較は「DROP 分析」ページ参照</p>
+          <div id="score_ranking" class="rank-list"></div>
+        </div>
+      </section>
+    </section>
+    <!-- ===================== DROP VIEWER VIEW ===================== -->
+    <section id="view-dropviewer" class="view">
+      <div class="topbar">
+        <div><h1>DROP Viewer</h1><p>特定のウェルビーイングスコアが高い投稿を、地図と一覧で確認</p></div>
+        <div class="status"><span class="pulse"></span>JSON DATA CONNECTED</div>
+      </div>
+      <div class="filters viewer-controls">
+        <label>インデックス
+          <select id="scoreKey"></select>
+        </label>
+        <label>スコア閾値（この値以上を表示）
+          <div class="threshold-ctrl">
+            <input type="range" id="scoreThreshold" min="0" max="10" step="1" value="1">
+            <span class="th-val" id="scoreThresholdVal">1</span>
+          </div>
+        </label>
+        <span class="hint" id="viewerHint"></span>
+      </div>
+      <div class="card map-card">
+        <div class="map-head">
+          <h3 class="card-title">投稿地点マップ</h3>
+          <div class="map-legend">
+            <span class="lg"><i class="dot"></i>DROP投稿</span>
+          </div>
+        </div>
+        <div id="dropMap" class="map-box tall"></div>
+      </div>
+      <div id="dropCount" class="empty-note" style="margin-top:14px"></div>
+      <div id="post-grid" class="post-grid"></div>
+    </section>
+    <!-- ===================== DROP ANALYSIS VIEW ===================== -->
+    <section id="view-dropanalysis" class="view">
+      <div class="topbar">
+        <div><h1>DROP Analysis</h1><p>ユーザー属性ごとに Index スコア・Focus 構成比を比較</p></div>
+        <div class="status"><span class="pulse"></span>JSON DATA CONNECTED</div>
+      </div>
+      <div class="filters viewer-controls">
+        <label>ユーザー属性
+          <select id="analysisAttr"></select>
+        </label>
+        <label>スコア種別
+          <select id="analysisScoreType">
+            <option value="index">Index（指標別平均スコア）</option>
+            <option value="focus">Focus（フォーカス構成比）</option>
+          </select>
+        </label>
+        <label id="analysisIndexWrap">インデックスの種類
+          <select id="analysisIndexKey"></select>
+        </label>
+        <span class="hint" id="analysisHint">属性値ごとに artwork_id ユニークカウントで集計します（行数ではなく投稿単位）</span>
+      </div>
+      <div class="card full">
+        <h3 class="card-title" id="analysisTitle">-</h3>
+        <p class="card-sub" id="analysisSub"></p>
+        <div id="analysisChart"></div>
+      </div>
+    </section>
+    <!-- ===================== STAMP VIEWER VIEW ===================== -->
+    <section id="view-stampviewer" class="view">
+      <div class="topbar">
+        <div><h1>STAMP Viewer</h1><p>スタンプラリー獲得地点を、件数（円のサイズ）で可視化</p></div>
+        <div class="status"><span class="pulse"></span>JSON DATA CONNECTED</div>
+      </div>
+      <div class="card map-card">
+        <div class="map-head">
+          <h3 class="card-title">スタンプ獲得地点マップ</h3>
+          <div class="map-legend">
+            <span class="lg"><i class="dot"></i>スタンプ件数</span>
+          </div>
+        </div>
+        <div id="stampMap" class="map-box tall"></div>
+      </div>
+      <div class="section-label"><h2>Spot Ranking<span class="note">スタンプ獲得件数の多いスポット</span></h2></div>
+      <div class="card">
+        <div id="stamp-rank" class="rank-list"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<!-- ===================== DROP 詳細モーダル ===================== -->
+<div id="dropDetailModal" class="modal-overlay">
+  <div id="dropDetailBox" class="modal-box">
+    <div class="modal-head">
+      <span id="dropDetailSeg" class="modal-seg">DROP投稿</span>
+      <button type="button" class="modal-close" id="dropDetailClose" aria-label="閉じる">✕</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <img id="dropDetailImg" class="modal-img" loading="lazy">
+        <div id="dropDetailMeta" class="modal-meta-list"></div>
+      </div>
+      <div>
+        <p id="dropDetailSentence" class="modal-sentence"></p>
+        <p id="dropDetailFocusEvidence" class="modal-evidence"></p>
+        <p id="dropDetailIndexEvidence" class="modal-evidence"></p>
+        <h4 class="modal-score-title">全指標スコア比較（Index）</h4>
+        <p class="modal-score-sub">この投稿の index_score を指標（index）ごとに棒グラフで表示（太字＝一覧で選択中の指標）</p>
+        <div id="dropDetailBars" class="detail-bars"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<footer>参照: MART_STAMP_JoinAttribute.json / MART_DROP_JoinAttribute_scored.json ・ DROP側は artwork_id × index（1投稿20行）の縦持ち形式のため、投稿数・平均スコア等はすべて artwork_id 単位に集約してから集計（行数カウントは行わない）。参加者数の集計は account_id 単位のユニークカウント。複数選択項目（questionnaire_q3 / questionnaire_q5）はカンマ区切りを展開して集計。左サイドバーのフィルタ（性別・年代・居住区分・居住地・来訪目的・体験ニーズ・まちなかへの実感／期待）はすべて複数選択式で、ページ内の全ビューに連動します。</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const PATHS={
+  stamp:'MART_STAMP_JoinAttribute.json',
+  drop:'MART_DROP_JoinAttribute_scored.json'
+};
+let RAW={stamp:[], drop:[]};
+const el=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat('ja-JP').format(n);
+const fmt1=n=>new Intl.NumberFormat('ja-JP',{minimumFractionDigits:1,maximumFractionDigits:1}).format(n);
+// MART_DROP は「1 artwork_id × 20 index」の縦持ち（ロング）形式。
+// index / index_score / index_evidence が指標軸、focus / focus_evidence が投稿単位の分類軸。
+let INDEX_KEYS=[]; // index の一覧（例: 快適な生活, 楽しさ, ... 全20種）
+let FOCUS_KEYS=[]; // focus の一覧（例: 活動, 機能, 空間, 自然文化）
+let ARTWORKS=[];   // artwork_id を基準に1行へ集約したDROP投稿（カウントは常にこの配列基準＝行数カウントをしない）
+const NA_LABEL='(未回答)';
 
+/* artwork_id を基準に縦持ちDROPデータを1投稿1レコードへ集約する。
+   scores[index名] = { score, evidence } を保持し、focus/focus_evidenceは投稿単位でそのまま引き継ぐ。 */
+function buildArtworks(dropRows){
+  const map = new Map();
+  dropRows.forEach(r=>{
+    let a = map.get(r.artwork_id);
+    if(!a){
+      a = {
+        artwork_id:r.artwork_id, account_id:r.account_id, account_name:r.account_name,
+        gender:r.gender, age_group:r.age_group, age_group_half:r.age_group_half,
+        residence_segment:r.residence_segment,
+        questionnaire_q1:r.questionnaire_q1, questionnaire_q2:r.questionnaire_q2,
+        questionnaire_q3:r.questionnaire_q3, questionnaire_q4:r.questionnaire_q4, questionnaire_q5:r.questionnaire_q5,
+        post_collab_event_name:r.post_collab_event_name, post_dated_at:r.post_dated_at, post_date:r.post_date,
+        latitude:r.latitude, longitude:r.longitude,
+        image_file_path_thumbnail:r.image_file_path_thumbnail, image_file_path:r.image_file_path,
+        sentence:r.sentence, focus:r.focus, focus_evidence:r.focus_evidence,
+        scores:{}
+      };
+      map.set(r.artwork_id, a);
+    }
+    if(r.index) a.scores[r.index] = { score:Number(r.index_score)||0, evidence:r.index_evidence||'' };
+  });
+  return [...map.values()];
+}
+
+/* ===================== Filter definitions ===================== */
+const FILTER_DEFS=[
+  {key:'gender', label:'性別', multi:false, order:['男性','女性','無回答']},
+  {key:'age_group', label:'年代', multi:false, order:['10代','20代','30代','40代','50代','60代','70代','80代']},
+  {key:'residence_segment', label:'居住区分', multi:false, order:['定住人口','非定住人口']},
+  {key:'questionnaire_q1', label:'居住地', multi:false, order:null},
+  {key:'questionnaire_q2', label:'来訪目的', multi:false, order:null},
+  {key:'questionnaire_q3', label:'体験ニーズ', multi:true, order:null},
+  {key:'questionnaire_q4', label:'まちなかへの実感', multi:false, order:['とても感じている','やや感じている','どちらでもない','あまり感じていない','全く感じていない']},
+  {key:'questionnaire_q5', label:'まちなかへの期待', multi:true, order:null},
+];
+const FILTER_OPTIONS={}; // key -> ordered array of possible values
+const FILTER_STATE={};   // key -> Set of currently-selected values
+
+function fieldValues(row, key, multi){
+  const v = row[key];
+  if(v===null || v===undefined || v==='') return [NA_LABEL];
+  if(multi) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
+  return [String(v).trim()];
+}
+function matchesFilters(row){
+  return FILTER_DEFS.every(def=>{
+    const sel = FILTER_STATE[def.key];
+    if(!sel || sel.size===0) return false;
+    const vals = fieldValues(row, def.key, def.multi);
+    return vals.some(v=>sel.has(v));
+  });
+}
+function buildFilterOptions(){
+  const combined = [...RAW.stamp, ...ARTWORKS];
+  FILTER_DEFS.forEach(def=>{
+    const set=new Set();
+    combined.forEach(row=>{ fieldValues(row, def.key, def.multi).forEach(v=>set.add(v)); });
+    let arr=[...set];
+    if(def.order){
+      const known = def.order.filter(o=>set.has(o));
+      const rest = arr.filter(v=>!def.order.includes(v)).sort((a,b)=> a===NA_LABEL?1:(b===NA_LABEL?-1:a.localeCompare(b,'ja')));
+      arr = known.concat(rest);
+    } else {
+      arr.sort((a,b)=> a===NA_LABEL?1:(b===NA_LABEL?-1:a.localeCompare(b,'ja')));
+    }
+    FILTER_OPTIONS[def.key]=arr;
+    FILTER_STATE[def.key]=new Set(arr); // default: all selected (= no filtering)
+  });
+}
+function renderFilterGroups(){
+  const box=el('filterGroups');
+  box.innerHTML = FILTER_DEFS.map((def,idx)=>{
+    const opts = FILTER_OPTIONS[def.key];
+    const optsHtml = opts.map(v=>{
+      const checked = FILTER_STATE[def.key].has(v) ? 'checked' : '';
+      const safe = String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      return `<label><input type="checkbox" data-idx="${idx}" data-filter="${def.key}" value="${safe}" ${checked}> ${safe}</label>`;
+    }).join('');
+    return `<details class="filter-group" ${idx<3?'open':''}>
+      <summary>${def.label}<span class="fg-count">${FILTER_STATE[def.key].size}/${opts.length}</span></summary>
+      <div class="fg-options">${optsHtml}</div>
+    </details>`;
+  }).join('');
+  box.querySelectorAll('input[type=checkbox][data-filter]').forEach(cb=>{
+    cb.addEventListener('change', onFilterChange);
+  });
+}
+function onFilterChange(e){
+  const key = e.target.getAttribute('data-filter');
+  const val = e.target.value;
+  if(e.target.checked) FILTER_STATE[key].add(val); else FILTER_STATE[key].delete(val);
+  const idx = e.target.getAttribute('data-idx');
+  const summarySpan = box_query_count(idx);
+  if(summarySpan) summarySpan.textContent = `${FILTER_STATE[key].size}/${FILTER_OPTIONS[key].length}`;
+  renderAll();
+}
+function box_query_count(idx){
+  const groups = document.querySelectorAll('.filter-group');
+  const g = groups[idx];
+  return g ? g.querySelector('.fg-count') : null;
+}
+el('filterSelectAll').addEventListener('click', ()=>{
+  FILTER_DEFS.forEach(def=> FILTER_STATE[def.key]=new Set(FILTER_OPTIONS[def.key]));
+  renderFilterGroups(); renderAll();
+});
+el('filterClearAll').addEventListener('click', ()=>{
+  FILTER_DEFS.forEach(def=> FILTER_STATE[def.key]=new Set());
+  renderFilterGroups(); renderAll();
+});
+
+function getFilteredStamp(){ return RAW.stamp.filter(matchesFilters); }
+// DROP側は必ず ARTWORKS（artwork_id 単位に集約済み）をフィルタする。行配列(RAW.drop)を直接使うと
+// 1投稿=20行のため件数・平均値が水増しされるので使用しない。
+function getFilteredDropArtworks(){ return ARTWORKS.filter(matchesFilters); }
+
+function uniqueByAccount(rows){
+  const m=new Map();
+  rows.forEach(r=>{ if(r.account_id && !m.has(r.account_id)) m.set(r.account_id, r); });
+  return [...m.values()];
+}
+function countBy(rows, key, multi=false){
+  const c={};
+  rows.forEach(r=>{
+    const parts = fieldValues(r, key, multi);
+    parts.forEach(p=>{ c[p]=(c[p]||0)+1; });
+  });
+  return c;
+}
+function mean(arr){ return arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : 0; }
+
+function renderCategory(elId, users, key, multi=false, orderList=null){
+  const counts = countBy(users, key, multi);
+  const total = users.length || 1;
+  let labels;
+  if(orderList){
+    labels = orderList.filter(l => (counts[l]||0) > 0);
+    const rest = Object.keys(counts).filter(l=>!orderList.includes(l)).sort((a,b)=>counts[b]-counts[a]);
+    labels = labels.concat(rest);
+  } else {
+    labels = Object.keys(counts).sort((a,b)=> counts[b]-counts[a]);
+  }
+  const box = el(elId);
+  if(!labels.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
+  const maxCount = Math.max(...labels.map(l=>counts[l]));
+  box.innerHTML = labels.map(label=>{
+    const n = counts[label]||0;
+    const pct = total ? (n/total*100) : 0;
+    const w = Math.max(pct, n>0?2:0);
+    return `<div class="xrow">
+      <div class="xlabel">${label}</div>
+      <div class="xbar-line"><div class="xtrack"><div class="xfill" style="width:${w}%"></div></div><span class="xval">${n}人 (${pct.toFixed(1)}%)</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderScoreRanking(artworks){
+  const box = el('score_ranking');
+  if(!INDEX_KEYS.length || !artworks.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
+  const stats = INDEX_KEYS.map(k=>{
+    const arr = artworks.map(a=> a.scores[k] ? a.scores[k].score : 0);
+    return {key:k, label:k, avg: mean(arr)};
+  });
+  stats.sort((a,b)=> b.avg-a.avg);
+  const maxAvg = Math.max(0.01, ...stats.map(s=>s.avg));
+  box.innerHTML = stats.map((s,i)=>{
+    const pct = Math.max(2, s.avg/maxAvg*100);
+    return `<div class="rank-row">
+      <div class="rank-num">${i+1}</div>
+      <div class="rank-body">
+        <span class="rank-name">${s.label}</span>
+        <div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="rank-val">${fmt1(s.avg)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderSummary(){
+  const ds = el('dataset').value;
+  const stamp = getFilteredStamp();
+  const drop = getFilteredDropArtworks(); // artwork_id 単位（行数ではない）
+  const combinedRaw = ds==='all' ? [...stamp, ...drop] : (ds==='stamp' ? stamp : drop);
+  const users = uniqueByAccount(combinedRaw);
+
+  el('k_total').textContent = fmt(uniqueByAccount([...stamp, ...drop]).length);
+  el('k_drop_posts').textContent = fmt(drop.length); // artwork_id ユニークカウント
+  el('k_drop_users').textContent = fmt(uniqueByAccount(drop).length);
+  el('k_stamp_users').textContent = fmt(uniqueByAccount(stamp).length);
+
+  const ageOrder=['10代','20代','30代','40代','50代','60代','70代','80代'];
+  renderCategory('x_age', users, 'age_group', false, ageOrder);
+  renderCategory('x_gender', users, 'gender', false, ['男性','女性','無回答']);
+  renderCategory('x_residence_segment', users, 'residence_segment', false, ['定住人口','非定住人口']);
+  renderCategory('x_q1', users, 'questionnaire_q1');
+  renderCategory('x_q2', users, 'questionnaire_q2');
+  renderCategory('x_q4', users, 'questionnaire_q4', false, ['とても感じている','やや感じている','どちらでもない','あまり感じていない','全く感じていない']);
+  renderCategory('x_q3', users, 'questionnaire_q3', true);
+
+  renderScoreRanking(drop);
+}
+
+/* ===================== DROP Viewer ===================== */
+/* インデックス（index）でフィルタし、スコア（index_score）の閾値以上を表示する */
+function populateScoreSelect(){
+  const sel = el('scoreKey');
+  sel.innerHTML = INDEX_KEYS.map(k=>`<option value="${k}">${k}</option>`).join('');
+}
+function postCardHtml(a, key, idx){
+  const score = a.scores[key] ? a.scores[key].score : 0;
+  const img = a.image_file_path_thumbnail || a.image_file_path || '';
+  const sentence = (a.sentence || '').replace(/</g,'&lt;');
+  return `<div class="post-card" data-pidx="${idx}" onclick="openDropDetail(${idx})">
+    <img class="thumb" loading="lazy" src="${img}" onerror="this.onerror=null;this.style.visibility='hidden'">
+    <div class="body">
+      <div class="badge-row">
+        <span class="score-badge">${key} ${score}</span>
+        <span class="focus-badge">${a.focus||'-'}</span>
+      </div>
+      <p class="sentence">${sentence}</p>
+      <div class="meta">${a.account_name||'匿名'}・${a.age_group||'-'}・${a.gender||'-'}</div>
+      <div class="detail-hint">クリックで詳細を表示 →</div>
+    </div>
+  </div>`;
+}
+let DROP_VIEWER_ITEMS = [];
+let GLOBAL_SCORE_MAX = 1;
+function computeGlobalScoreMax(){
+  let max = 1;
+  ARTWORKS.forEach(a=>{
+    INDEX_KEYS.forEach(k=>{
+      const v = a.scores[k] ? a.scores[k].score : 0;
+      if(v > max) max = v;
+    });
+  });
+  GLOBAL_SCORE_MAX = max;
+}
+function openDropDetail(idx){
+  const item = DROP_VIEWER_ITEMS[idx];
+  if(!item) return;
+  const { post:a, key } = item;
+  const img = a.image_file_path_thumbnail || a.image_file_path || '';
+  const imgEl = el('dropDetailImg');
+  imgEl.style.visibility = 'visible';
+  imgEl.onerror = function(){ this.onerror=null; this.style.visibility='hidden'; };
+  imgEl.src = img;
+  el('dropDetailSeg').textContent = `DROP投稿・フォーカス: ${a.focus||'-'}`;
+  const curScore = a.scores[key] ? a.scores[key].score : 0;
+  const curEvidence = a.scores[key] ? a.scores[key].evidence : '';
+  el('dropDetailMeta').innerHTML = `
+    <div><b>投稿者:</b> ${a.account_name||'匿名'}</div>
+    <div><b>年齢層:</b> ${a.age_group||'-'}</div>
+    <div><b>性別:</b> ${a.gender||'-'}</div>
+    <div><b>居住区分:</b> ${a.residence_segment||'-'}</div>
+    <div><b>居住地:</b> ${a.questionnaire_q1||'-'}</div>
+    <div><b>フォーカス:</b> ${a.focus||'-'}</div>
+    <div><b>${key}スコア:</b> ${curScore}（一覧で選択中の指標）</div>
+  `;
+  el('dropDetailSentence').textContent = a.sentence || '(投稿文なし)';
+  el('dropDetailFocusEvidence').textContent = a.focus_evidence ? `フォーカス根拠: ${a.focus_evidence}` : '';
+  el('dropDetailIndexEvidence').textContent = curEvidence ? `${key}の根拠: ${curEvidence}` : '';
+  const rows = INDEX_KEYS.map(k=>({ key:k, label:k, val: a.scores[k] ? a.scores[k].score : 0 })).sort((a,b)=> b.val-a.val);
+  el('dropDetailBars').innerHTML = rows.map(r=>{
+    const pct = GLOBAL_SCORE_MAX>0 ? Math.min(100, r.val/GLOBAL_SCORE_MAX*100) : 0;
+    const isCurrent = r.key===key;
+    return `<div class="detail-bar-row${isCurrent?' current':''}">
+      <span class="db-label">${r.label}</span>
+      <div class="detail-bar-track"><div class="detail-bar-fill" style="width:${pct}%"></div></div>
+      <span class="db-val">${fmt1(r.val)}</span>
+    </div>`;
+  }).join('');
+  el('dropDetailModal').classList.add('open');
+}
+function closeDropDetail(){ el('dropDetailModal').classList.remove('open'); }
+let dropMap=null, dropMarkerLayer=null;
+function initDropMap(){
+  if(dropMap) return;
+  if(typeof L==='undefined'){
+    el('dropMap').innerHTML='<div class="empty-note" style="padding:16px">地図ライブラリ（Leaflet）を読み込めませんでした。インターネット接続を確認してください。</div>';
+    return;
+  }
+  dropMap = L.map('dropMap', {scrollWheelZoom:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:18, attribution:'&copy; OpenStreetMap contributors'
+  }).addTo(dropMap);
+  dropMarkerLayer = L.layerGroup().addTo(dropMap);
+  dropMap.setView([36.6975,137.2135], 14);
+}
+function renderDropViewer(){
+  const key = el('scoreKey').value;
+  const threshold = parseInt(el('scoreThreshold').value, 10) || 0;
+  el('scoreThresholdVal').textContent = threshold;
+  // artwork_id 単位（ARTWORKS）でフィルタ・カウントする。行数（RAW.drop.length）は使わない。
+  const shown = getFilteredDropArtworks()
+    .filter(a => (a.scores[key] ? a.scores[key].score : 0) >= threshold)
+    .sort((a,b)=> (b.scores[key]?b.scores[key].score:0) - (a.scores[key]?a.scores[key].score:0));
+  el('viewerHint').textContent = `${key}：スコア${threshold}以上・降順`;
+  el('dropCount').textContent = `該当 ${fmt(shown.length)}件（artwork_id ユニークカウント）`;
+  DROP_VIEWER_ITEMS = shown.map(a=>({post:a, key}));
+  const grid = el('post-grid');
+  grid.innerHTML = shown.length ? shown.map((a,i)=>postCardHtml(a,key,i)).join('') : '<div class="empty-note">該当する投稿がありません</div>';
+  if(!dropMap) return; // 地図が使えない場合は一覧のみ表示
+  dropMarkerLayer.clearLayers();
+  const bounds=[];
+  shown.forEach((a,idx)=>{
+    if(!a.latitude || !a.longitude) return;
+    const score = a.scores[key] ? a.scores[key].score : 0;
+    const marker = L.circleMarker([a.latitude,a.longitude], {
+      radius:7, color:'#fff', weight:1.5, fillColor:'#3f66b3', fillOpacity:.9
+    });
+    marker.bindPopup(
+      `<b>${(a.sentence||'').slice(0,60).replace(/</g,'&lt;')}</b><br>`+
+      `${key}スコア: ${score}・フォーカス: ${a.focus||'-'}<br>`+
+      `${a.account_name||'匿名'}・${a.age_group||'-'}<br>`+
+      `<button type="button" class="popup-detail-btn" onclick="openDropDetail(${idx})">詳細を見る</button>`
+    );
+    dropMarkerLayer.addLayer(marker);
+    bounds.push([a.latitude,a.longitude]);
+  });
+  if(bounds.length){
+    dropMap.fitBounds(L.latLngBounds(bounds).pad(0.25), {maxZoom:16});
+  }
+}
+
+/* ===================== DROP Analysis (属性別 Index / Focus 比較) ===================== */
+const ANALYSIS_COLORS=['var(--attr)','var(--acq)','var(--rich)','var(--gray)','#c2410c','#0891b2'];
+function populateAnalysisSelectors(){
+  el('analysisAttr').innerHTML = FILTER_DEFS.map(d=>`<option value="${d.key}">${d.label}</option>`).join('');
+  el('analysisIndexKey').innerHTML = INDEX_KEYS.map(k=>`<option value="${k}">${k}</option>`).join('');
+}
+function bucketizeArtworks(artworks, attrDef){
+  const buckets = {};
+  artworks.forEach(a=>{
+    fieldValues(a, attrDef.key, attrDef.multi).forEach(v=>{
+      (buckets[v] = buckets[v] || []).push(a);
+    });
+  });
+  return buckets;
+}
+function orderedLabels(buckets, attrDef){
+  let labels = Object.keys(buckets);
+  if(attrDef.order){
+    const known = attrDef.order.filter(o=>buckets[o]);
+    const rest = labels.filter(l=>!attrDef.order.includes(l)).sort((a,b)=> a===NA_LABEL?1:(b===NA_LABEL?-1:a.localeCompare(b,'ja')));
+    labels = known.concat(rest);
+  } else {
+    labels.sort((a,b)=> a===NA_LABEL?1:(b===NA_LABEL?-1:a.localeCompare(b,'ja')));
+  }
+  return labels;
+}
+function renderAnalysisIndex(artworks, attrDef){
+  const idxKey = el('analysisIndexKey').value || INDEX_KEYS[0];
+  el('analysisTitle').textContent = `${attrDef.label}別「${idxKey}」平均スコア（Index）`;
+  el('analysisSub').textContent = `artwork_id ユニークカウントで集計（フィルタ適用後 対象投稿 n=${fmt(artworks.length)}）`;
+  const buckets = bucketizeArtworks(artworks, attrDef);
+  const labels = orderedLabels(buckets, attrDef);
+  const stats = labels.map(l=>{
+    const arr = buckets[l].map(a=> a.scores[idxKey] ? a.scores[idxKey].score : 0);
+    return {label:l, avg:mean(arr), n:arr.length};
+  }).sort((a,b)=> b.avg-a.avg);
+  const box = el('analysisChart');
+  if(!stats.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
+  const maxAvg = Math.max(0.01, ...stats.map(s=>s.avg));
+  box.innerHTML = stats.map((s,i)=>{
+    const pct = Math.max(2, s.avg/maxAvg*100);
+    return `<div class="rank-row">
+      <div class="rank-num">${i+1}</div>
+      <div class="rank-body">
+        <span class="rank-name">${s.label}（n=${fmt(s.n)}）</span>
+        <div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="rank-val">${fmt1(s.avg)}</div>
+    </div>`;
+  }).join('');
+}
+function renderAnalysisFocus(artworks, attrDef){
+  el('analysisTitle').textContent = `${attrDef.label}別 フォーカス構成比（Focus）`;
+  el('analysisSub').textContent = `artwork_id ユニークカウントで集計（フィルタ適用後 対象投稿 n=${fmt(artworks.length)}）。属性値内でのfocus割合を表示`;
+  const buckets = bucketizeArtworks(artworks, attrDef);
+  const labels = orderedLabels(buckets, attrDef);
+  const colorFor = f => ANALYSIS_COLORS[FOCUS_KEYS.indexOf(f) % ANALYSIS_COLORS.length] || 'var(--dim)';
+  const box = el('analysisChart');
+  if(!labels.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
+  const rowsHtml = labels.map(l=>{
+    const arr = buckets[l];
+    const counts = {};
+    arr.forEach(a=>{ const f=a.focus||NA_LABEL; counts[f]=(counts[f]||0)+1; });
+    const total = arr.length || 1;
+    const segs = FOCUS_KEYS.map(f=>{
+      const n = counts[f]||0;
+      const pct = n/total*100;
+      return pct>0 ? `<div class="stack-seg" style="width:${pct}%;background:${colorFor(f)}" title="${f}: ${n}件 (${pct.toFixed(1)}%)"></div>` : '';
+    }).join('');
+    return `<div class="stack-row">
+      <div class="stack-label"><span>${l}</span><span>n=${fmt(total)}</span></div>
+      <div class="stack-track">${segs}</div>
+    </div>`;
+  }).join('');
+  const legendHtml = `<div class="stack-legend">${FOCUS_KEYS.map(f=>`<span class="lg"><i class="dot" style="background:${colorFor(f)}"></i>${f}</span>`).join('')}</div>`;
+  box.innerHTML = rowsHtml + legendHtml;
+}
+function renderAnalysis(){
+  const attrDef = FILTER_DEFS.find(d=>d.key===el('analysisAttr').value) || FILTER_DEFS[0];
+  const scoreType = el('analysisScoreType').value;
+  el('analysisIndexWrap').style.display = scoreType==='index' ? '' : 'none';
+  const artworks = getFilteredDropArtworks();
+  if(scoreType==='index') renderAnalysisIndex(artworks, attrDef);
+  else renderAnalysisFocus(artworks, attrDef);
+}
+
+/* ===================== STAMP Viewer ===================== */
+let stampMap=null, stampLayer=null;
+function aggregateStamps(rows){
+  const agg = new Map();
+  rows.forEach(r=>{
+    const eid = r.event_id, lat = r.spot_latitude, lng = r.spot_longitude;
+    if(!eid || !lat || !lng) return;
+    if(!agg.has(eid)) agg.set(eid, {eid, lat, lng, name:r.event_name, count:0});
+    agg.get(eid).count += 1;
+  });
+  return [...agg.values()];
+}
+function initStampMap(){
+  if(stampMap) return;
+  if(typeof L==='undefined'){
+    el('stampMap').innerHTML='<div class="empty-note" style="padding:16px">地図ライブラリ（Leaflet）を読み込めませんでした。インターネット接続を確認してください。</div>';
+    return;
+  }
+  stampMap = L.map('stampMap', {scrollWheelZoom:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:18, attribution:'&copy; OpenStreetMap contributors'
+  }).addTo(stampMap);
+  stampLayer = L.layerGroup().addTo(stampMap);
+  stampMap.setView([36.6975,137.2135], 15);
+}
+function renderStampMap(){
+  const items = aggregateStamps(getFilteredStamp());
+  if(stampMap){
+    stampLayer.clearLayers();
+    const maxCount = Math.max(1, ...items.map(i=>i.count));
+    const sizeFor = c => Math.round(24 + Math.sqrt(c/maxCount)*40);
+    const bounds = [];
+    items.forEach(it=>{
+      const size = sizeFor(it.count);
+      const icon = L.divIcon({
+        className:'',
+        html:`<div class="stamp-bubble" style="width:${size}px;height:${size}px;font-size:${Math.max(10,size*0.34)}px;">${it.count}</div>`,
+        iconSize:[size,size],
+        iconAnchor:[size/2,size/2]
+      });
+      const marker = L.marker([it.lat,it.lng], {icon});
+      marker.bindPopup(`<b>${it.name||'不明なスポット'}</b><br>スタンプ ${it.count}件`);
+      stampLayer.addLayer(marker);
+      bounds.push([it.lat, it.lng]);
+    });
+    if(bounds.length){
+      stampMap.fitBounds(L.latLngBounds(bounds).pad(0.15), {maxZoom:17});
+    }
+  }
+  renderStampRanking(items);
+}
+function renderStampRanking(items){
+  const sorted = [...items].sort((a,b)=>b.count-a.count);
+  const box = el('stamp-rank');
+  if(!sorted.length){ box.innerHTML = '<div class="empty-note">データがありません</div>'; return; }
+  const maxCount = Math.max(1, ...sorted.map(i=>i.count));
+  box.innerHTML = sorted.map((it,i)=>{
+    const pct = Math.max(3, it.count/maxCount*100);
+    const name = (it.name||'不明なスポット').replace(/\r?\n/g,' ').replace(/</g,'&lt;');
+    return `<div class="rank-row">
+      <div class="rank-num">${i+1}</div>
+      <div class="rank-body">
+        <span class="rank-name" title="${name}">${name}</span>
+        <div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="rank-val">${it.count}件</div>
+    </div>`;
+  }).join('');
+}
+
+/* ===================== Dispatch ===================== */
+let dropViewerVisited=false, stampViewerVisited=false, dropAnalysisVisited=false;
+function renderAll(){
+  const active = document.querySelector('.navi.active').getAttribute('data-view');
+  if(active === 'summary') renderSummary();
+  if(active === 'dropviewer' && dropViewerVisited) renderDropViewer();
+  if(active === 'dropanalysis' && dropAnalysisVisited) renderAnalysis();
+  if(active === 'stampviewer' && stampViewerVisited) renderStampMap();
+}
+
+/* ===================== Nav switching ===================== */
+document.querySelectorAll('.navi').forEach(nav=>{
+  nav.addEventListener('click', ()=>{
+    document.querySelectorAll('.navi').forEach(n=>n.classList.remove('active'));
+    nav.classList.add('active');
+    const target = nav.getAttribute('data-view');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    el('view-'+target).classList.add('active');
+    if(target === 'dropviewer'){
+      dropViewerVisited = true;
+      initDropMap();
+      setTimeout(()=>{ if(dropMap) dropMap.invalidateSize(); renderDropViewer(); }, 50);
+    }
+    if(target === 'dropanalysis'){
+      dropAnalysisVisited = true;
+      renderAnalysis();
+    }
+    if(target === 'stampviewer'){
+      stampViewerVisited = true;
+      initStampMap();
+      setTimeout(()=>{ if(stampMap) stampMap.invalidateSize(); renderStampMap(); }, 50);
+    }
+  });
+});
+
+/* ===================== Load & init ===================== */
+Promise.all(Object.entries(PATHS).map(async([k,p])=>{
+  const r = await fetch(p);
+  if(!r.ok) throw new Error(p+' を読み込めません（'+r.status+'）');
+  RAW[k] = await r.json();
+})).then(()=>{
+  // MART_DROP は artwork_id × index の縦持ち形式。artwork_id 単位に集約してから全ビューで使用する。
+  ARTWORKS = buildArtworks(RAW.drop);
+  INDEX_KEYS = [...new Set(RAW.drop.map(r=>r.index).filter(Boolean))];
+  FOCUS_KEYS = [...new Set(RAW.drop.map(r=>r.focus).filter(Boolean))];
+  computeGlobalScoreMax();
+  populateScoreSelect();
+  populateAnalysisSelectors();
+  buildFilterOptions();
+  renderFilterGroups();
+  renderAll();
+}).catch(e=>{
+  const box = el('error');
+  box.style.display='block';
+  box.textContent = 'JSONの読み込みに失敗しました。HTMLとJSONを同じフォルダーに置き、file:// ではなくローカルサーバー（例: python -m http.server）経由で開いてください。詳細: '+e.message;
+});
+el('dataset').addEventListener('change', renderAll);
+el('scoreKey').addEventListener('change', renderDropViewer);
+el('scoreThreshold').addEventListener('input', renderDropViewer);
+el('analysisAttr').addEventListener('change', renderAnalysis);
+el('analysisScoreType').addEventListener('change', renderAnalysis);
+el('analysisIndexKey').addEventListener('change', renderAnalysis);
+el('dropDetailClose').addEventListener('click', closeDropDetail);
+el('dropDetailModal').addEventListener('click', (e)=>{ if(e.target.id==='dropDetailModal') closeDropDetail(); });
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDropDetail(); });
+</script>
+</body>
+</html>
