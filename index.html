@@ -129,14 +129,22 @@ footer code{color:var(--muted)}
 .threshold-ctrl .th-val{font-size:13px;font-weight:800;color:var(--attr);min-width:26px;text-align:center}
 /* DROP analysis page */
 .modal-evidence{font-size:11px;color:var(--dim);margin:0 0 10px;line-height:1.6}
-.stack-row{margin:12px 0;padding-bottom:11px;border-bottom:1px solid var(--stroke)}
-.stack-row:last-child{border-bottom:0}
-.stack-row .stack-label{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:8px}
-.stack-track{display:flex;height:14px;background:#eef0f3;overflow:hidden;width:100%}
-.stack-seg{height:100%}
 .stack-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:14px}
 .stack-legend .lg{display:flex;align-items:center;gap:6px}
-.stack-legend .dot{width:10px;height:10px;display:inline-block;flex:0 0 auto}
+.stack-legend .dot{width:10px;height:10px;border-radius:2px;display:inline-block;flex:0 0 auto}
+/* heatmap tables (Index全指標比較 / Focus注目度比較) */
+.heatmap-wrap{overflow-x:auto;margin-top:6px}
+table.heatmap{border-collapse:collapse;width:100%;min-width:560px}
+table.heatmap th, table.heatmap td{padding:7px 9px;text-align:center;font-size:11px;white-space:nowrap}
+table.heatmap thead th{font-size:10.5px;font-weight:800;color:var(--muted);border-bottom:2px solid var(--stroke);white-space:normal;max-width:110px;line-height:1.35;vertical-align:bottom}
+table.heatmap thead th .col-n{display:block;font-weight:600;color:var(--dim);margin-top:3px}
+table.heatmap tbody th{text-align:left;font-weight:700;color:var(--text);white-space:nowrap;padding-right:14px;border-right:2px solid var(--stroke)}
+table.heatmap tbody th .row-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+table.heatmap td.cell{font-variant-numeric:tabular-nums;font-weight:700}
+table.heatmap tbody tr:nth-child(odd) th{background:#fafbfc}
+.heatmap-legend{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11px;color:var(--muted)}
+.heatmap-scale{display:flex;height:11px;width:170px;border-radius:2px;overflow:hidden;flex:0 0 auto}
+.heatmap-scale span{flex:1}
 /* DROP detail modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,24,30,.55);z-index:1000;padding:28px 16px;overflow-y:auto}
 .modal-overlay.open{display:flex;align-items:flex-start;justify-content:center}
@@ -295,28 +303,24 @@ footer code{color:var(--muted)}
     <!-- ===================== DROP ANALYSIS VIEW ===================== -->
     <section id="view-dropanalysis" class="view">
       <div class="topbar">
-        <div><h1>DROP Analysis</h1><p>ユーザー属性ごとに Index スコア・Focus 構成比を比較</p></div>
+        <div><h1>DROP Analysis</h1><p>ユーザー属性ごとに、全20指標のスコアとFocus（注目対象）を比較</p></div>
         <div class="status"><span class="pulse"></span>JSON DATA CONNECTED</div>
       </div>
       <div class="filters viewer-controls">
         <label>ユーザー属性
           <select id="analysisAttr"></select>
         </label>
-        <label>スコア種別
-          <select id="analysisScoreType">
-            <option value="index">Index（指標別平均スコア）</option>
-            <option value="focus">Focus（フォーカス構成比）</option>
-          </select>
-        </label>
-        <label id="analysisIndexWrap">インデックスの種類
-          <select id="analysisIndexKey"></select>
-        </label>
-        <span class="hint" id="analysisHint">属性値ごとに artwork_id ユニークカウントで集計します（行数ではなく投稿単位）</span>
+        <span class="hint" id="analysisHint">artwork_id ユニークカウントで集計（行数ではなく投稿単位）。セルの色の濃さがスコア・比率の大きさを表します</span>
       </div>
       <div class="card full">
-        <h3 class="card-title" id="analysisTitle">-</h3>
-        <p class="card-sub" id="analysisSub"></p>
-        <div id="analysisChart"></div>
+        <h3 class="card-title" id="analysisIndexTitle">-</h3>
+        <p class="card-sub" id="analysisIndexSub">全20指標（index）の属性値別 平均スコアをヒートマップで比較。色が濃いほどスコアが高いことを示す</p>
+        <div id="analysisIndexChart" class="heatmap-wrap"></div>
+      </div>
+      <div class="card full" style="margin-top:18px">
+        <h3 class="card-title" id="analysisFocusTitle">-</h3>
+        <p class="card-sub" id="analysisFocusSub">属性値ごとに、どのFocus（活動／機能／空間／自然文化）に注目した投稿が多いかを比較。Focusごとに色分けし、色が濃いほどその属性値内での比率が高いことを示す</p>
+        <div id="analysisFocusChart" class="heatmap-wrap"></div>
       </div>
     </section>
     <!-- ===================== STAMP VIEWER VIEW ===================== -->
@@ -707,11 +711,12 @@ function renderDropViewer(){
   }
 }
 
-/* ===================== DROP Analysis (属性別 Index / Focus 比較) ===================== */
-const ANALYSIS_COLORS=['var(--attr)','var(--acq)','var(--rich)','var(--gray)','#c2410c','#0891b2'];
+/* ===================== DROP Analysis (属性別に全Index・Focusを比較) ===================== */
+// Focus用の識別しやすい配色（行＝Focusごとに固有の色相を割り当て、濃淡でその属性値内の比率を表現）
+const FOCUS_COLOR_RGB=['63,102,179','47,143,102','122,88,176','194,65,12','8,145,178','217,119,6'];
+const INDEX_HEAT_RGB='63,102,179'; // Indexヒートマップの基準色（濃淡でスコアの高さを表現）
 function populateAnalysisSelectors(){
   el('analysisAttr').innerHTML = FILTER_DEFS.map(d=>`<option value="${d.key}">${d.label}</option>`).join('');
-  el('analysisIndexKey').innerHTML = INDEX_KEYS.map(k=>`<option value="${k}">${k}</option>`).join('');
 }
 function bucketizeArtworks(artworks, attrDef){
   const buckets = {};
@@ -733,64 +738,75 @@ function orderedLabels(buckets, attrDef){
   }
   return labels;
 }
-function renderAnalysisIndex(artworks, attrDef){
-  const idxKey = el('analysisIndexKey').value || INDEX_KEYS[0];
-  el('analysisTitle').textContent = `${attrDef.label}別「${idxKey}」平均スコア（Index）`;
-  el('analysisSub').textContent = `artwork_id ユニークカウントで集計（フィルタ適用後 対象投稿 n=${fmt(artworks.length)}）`;
-  const buckets = bucketizeArtworks(artworks, attrDef);
-  const labels = orderedLabels(buckets, attrDef);
-  const stats = labels.map(l=>{
-    const arr = buckets[l].map(a=> a.scores[idxKey] ? a.scores[idxKey].score : 0);
-    return {label:l, avg:mean(arr), n:arr.length};
-  }).sort((a,b)=> b.avg-a.avg);
-  const box = el('analysisChart');
-  if(!stats.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
-  const maxAvg = Math.max(0.01, ...stats.map(s=>s.avg));
-  box.innerHTML = stats.map((s,i)=>{
-    const pct = Math.max(2, s.avg/maxAvg*100);
-    return `<div class="rank-row">
-      <div class="rank-num">${i+1}</div>
-      <div class="rank-body">
-        <span class="rank-name">${s.label}（n=${fmt(s.n)}）</span>
-        <div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div>
-      </div>
-      <div class="rank-val">${fmt1(s.avg)}</div>
-    </div>`;
-  }).join('');
+function heatBg(rgbTriplet, ratio, minOp=0.07, maxOp=0.92){
+  const op = minOp + Math.max(0, Math.min(1, ratio)) * (maxOp - minOp);
+  return `rgba(${rgbTriplet},${op.toFixed(2)})`;
 }
-function renderAnalysisFocus(artworks, attrDef){
-  el('analysisTitle').textContent = `${attrDef.label}別 フォーカス構成比（Focus）`;
-  el('analysisSub').textContent = `artwork_id ユニークカウントで集計（フィルタ適用後 対象投稿 n=${fmt(artworks.length)}）。属性値内でのfocus割合を表示`;
+function heatTextColor(ratio){ return ratio > 0.52 ? '#fff' : '#1f2733'; }
+function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+/* 全20 index を、選択した属性の各値ごとの平均スコアでヒートマップ表示（行=index、列=属性値） */
+function renderAnalysisIndex(artworks, attrDef){
+  el('analysisIndexTitle').textContent = `全指標（Index）比較 — ${attrDef.label}別 平均スコア`;
   const buckets = bucketizeArtworks(artworks, attrDef);
   const labels = orderedLabels(buckets, attrDef);
-  const colorFor = f => ANALYSIS_COLORS[FOCUS_KEYS.indexOf(f) % ANALYSIS_COLORS.length] || 'var(--dim)';
-  const box = el('analysisChart');
-  if(!labels.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
-  const rowsHtml = labels.map(l=>{
-    const arr = buckets[l];
-    const counts = {};
-    arr.forEach(a=>{ const f=a.focus||NA_LABEL; counts[f]=(counts[f]||0)+1; });
-    const total = arr.length || 1;
-    const segs = FOCUS_KEYS.map(f=>{
-      const n = counts[f]||0;
-      const pct = n/total*100;
-      return pct>0 ? `<div class="stack-seg" style="width:${pct}%;background:${colorFor(f)}" title="${f}: ${n}件 (${pct.toFixed(1)}%)"></div>` : '';
+  const box = el('analysisIndexChart');
+  if(!labels.length || !INDEX_KEYS.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
+  // 指標は全体平均（フィルタ適用後の対象全体）が高い順に並べ、傾向を把握しやすくする
+  const overallAvg = {};
+  INDEX_KEYS.forEach(k=>{ overallAvg[k] = mean(artworks.map(a=> a.scores[k] ? a.scores[k].score : 0)); });
+  const rowKeys = [...INDEX_KEYS].sort((a,b)=> overallAvg[b]-overallAvg[a]);
+  let maxVal = 0.01;
+  const matrix = rowKeys.map(k=> labels.map(l=>{
+    const arr = buckets[l].map(a=> a.scores[k] ? a.scores[k].score : 0);
+    const v = mean(arr);
+    if(v > maxVal) maxVal = v;
+    return v;
+  }));
+  const theadCols = labels.map(l=>`<th>${escAttr(l)}<span class="col-n">n=${fmt(buckets[l].length)}</span></th>`).join('');
+  const bodyRows = rowKeys.map((k,ri)=>{
+    const cells = matrix[ri].map(v=>{
+      const ratio = v / maxVal;
+      return `<td class="cell" style="background:${heatBg(INDEX_HEAT_RGB,ratio)};color:${heatTextColor(ratio)}" title="${escAttr(k)}: ${fmt1(v)}">${fmt1(v)}</td>`;
     }).join('');
-    return `<div class="stack-row">
-      <div class="stack-label"><span>${l}</span><span>n=${fmt(total)}</span></div>
-      <div class="stack-track">${segs}</div>
-    </div>`;
+    return `<tr><th>${escAttr(k)}</th>${cells}</tr>`;
   }).join('');
-  const legendHtml = `<div class="stack-legend">${FOCUS_KEYS.map(f=>`<span class="lg"><i class="dot" style="background:${colorFor(f)}"></i>${f}</span>`).join('')}</div>`;
-  box.innerHTML = rowsHtml + legendHtml;
+  box.innerHTML = `<table class="heatmap"><thead><tr><th></th>${theadCols}</tr></thead><tbody>${bodyRows}</tbody></table>
+    <div class="heatmap-legend">スコア（弱い）
+      <span class="heatmap-scale">${Array.from({length:10}).map((_,i)=>`<span style="background:${heatBg(INDEX_HEAT_RGB,i/9)}"></span>`).join('')}</span>
+      強い（最大 ${fmt1(maxVal)}）
+    </div>`;
+}
+
+/* 属性値ごとに、どのFocusへの言及が多いかをヒートマップ表示（行=Focus、列=属性値、値=その属性値内での構成比%） */
+function renderAnalysisFocus(artworks, attrDef){
+  el('analysisFocusTitle').textContent = `Focus注目度比較 — ${attrDef.label}別 構成比`;
+  const buckets = bucketizeArtworks(artworks, attrDef);
+  const labels = orderedLabels(buckets, attrDef);
+  const box = el('analysisFocusChart');
+  if(!labels.length || !FOCUS_KEYS.length){ box.innerHTML='<div class="empty-note">データがありません</div>'; return; }
+  const colorFor = f => FOCUS_COLOR_RGB[FOCUS_KEYS.indexOf(f) % FOCUS_COLOR_RGB.length];
+  const theadCols = labels.map(l=>`<th>${escAttr(l)}<span class="col-n">n=${fmt(buckets[l].length)}</span></th>`).join('');
+  const bodyRows = FOCUS_KEYS.map(f=>{
+    const rgb = colorFor(f);
+    const cells = labels.map(l=>{
+      const arr = buckets[l];
+      const total = arr.length || 1;
+      const n = arr.filter(a=>(a.focus||NA_LABEL)===f).length;
+      const pct = n/total*100;
+      const ratio = pct/100;
+      return `<td class="cell" style="background:${heatBg(rgb,ratio)};color:${heatTextColor(ratio)}" title="${escAttr(l)} × ${escAttr(f)}: ${n}件 (${pct.toFixed(1)}%)">${pct.toFixed(0)}%</td>`;
+    }).join('');
+    return `<tr><th><span class="row-dot" style="background:rgb(${rgb})"></span>${escAttr(f)}</th>${cells}</tr>`;
+  }).join('');
+  const legend = `<div class="stack-legend">${FOCUS_KEYS.map(f=>`<span class="lg"><i class="dot" style="background:rgb(${colorFor(f)})"></i>${f}</span>`).join('')}</div>`;
+  box.innerHTML = `<table class="heatmap"><thead><tr><th></th>${theadCols}</tr></thead><tbody>${bodyRows}</tbody></table>${legend}`;
 }
 function renderAnalysis(){
   const attrDef = FILTER_DEFS.find(d=>d.key===el('analysisAttr').value) || FILTER_DEFS[0];
-  const scoreType = el('analysisScoreType').value;
-  el('analysisIndexWrap').style.display = scoreType==='index' ? '' : 'none';
   const artworks = getFilteredDropArtworks();
-  if(scoreType==='index') renderAnalysisIndex(artworks, attrDef);
-  else renderAnalysisFocus(artworks, attrDef);
+  renderAnalysisIndex(artworks, attrDef);
+  renderAnalysisFocus(artworks, attrDef);
 }
 
 /* ===================== STAMP Viewer ===================== */
@@ -923,8 +939,6 @@ el('dataset').addEventListener('change', renderAll);
 el('scoreKey').addEventListener('change', renderDropViewer);
 el('scoreThreshold').addEventListener('input', renderDropViewer);
 el('analysisAttr').addEventListener('change', renderAnalysis);
-el('analysisScoreType').addEventListener('change', renderAnalysis);
-el('analysisIndexKey').addEventListener('change', renderAnalysis);
 el('dropDetailClose').addEventListener('click', closeDropDetail);
 el('dropDetailModal').addEventListener('click', (e)=>{ if(e.target.id==='dropDetailModal') closeDropDetail(); });
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDropDetail(); });
