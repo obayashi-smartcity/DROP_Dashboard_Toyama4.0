@@ -432,7 +432,7 @@ table.plain td.diff-pos{color:var(--g6);font-weight:700} table.plain td.diff-neg
 // 読み込むJSON（上から順に試し、最初に読めたものを使用）
 const PATHS={
   stamp:['mart_action_stamp_user.json','MART_STAMP_JoinAttribute.json'],
-  drop:['mart_action_drop_user_scored.json','mart_action_drop_user_scored_spot_attach.json'] #【変更】GPT-6でのラベル付与データも含むファイルを読み込む
+  drop:['mart_action_drop_user_scored.json','mart_action_drop_user_scored_spot_attach.json'] // 【変更】GPT-6でのラベル付与データも含むファイルを読み込む
 };
 let RAW={stamp:[], drop:[]};
 let LOADED={stamp:'', drop:''};
